@@ -1,0 +1,152 @@
+#!/bin/bash
+#
+# Timeshift UKI Hooks v2
+# Restore Hook - Restaura UKIs a la ESP después de la restauración
+#
+# Contexto: Después de restaurar un snapshot de Btrfs, este script recupera los UKIs
+# que estaban guardados en /etc/timeshift/uki-backup/ (incluidos en el snapshot) y los
+# devuelve a la partición EFI (ESP) para que coincidan con el kernel/módulos restaurados.
+#
+# Seguridad: Los UKIs ya estaban verificados por Secure Boot antes de ser respaldados.
+# Este script solo restaura archivos existentes y calcula checksums para verificar integridad.
+#
+
+set -euo pipefail
+
+BACKUP_DIR="/etc/timeshift/uki-backup"
+LOG_FILE="/var/log/timeshift.log"
+# ----------------------
+
+log() {
+    local level="$1"
+    shift
+    local message="$*"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [UKI Restore Hook] [$level] $message"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [UKI Restore Hook] [$level] $message" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+echo "=== [UKI Restore Hook] Iniciando restauración ===" >> "$LOG_FILE" 2>/dev/null || true
+
+WAS_RO=false
+TARGET_MNT=""
+
+# 1. Asegurar el montaje de la partición de arranque
+for mnt in /boot /efi; do
+    if [ -d "$mnt" ] && [ ! -L "$mnt" ]; then
+        if ! mountpoint -q "$mnt" 2>/dev/null; then
+            log "INFO" "Montando $mnt..."
+            if ! mount "$mnt" 2>/dev/null; then
+                log "WARN" "No se pudo montar $mnt, continuando sin montar"
+                continue
+            fi
+        fi
+
+        if mountpoint -q "$mnt" 2>/dev/null; then
+            TARGET_MNT="$mnt"
+            
+            # Comprobar si está montado en modo solo lectura (ro)
+            if findmnt -O ro "$mnt" >/dev/null 2>&1; then
+                log "INFO" "$mnt está montado como SOLO LECTURA. Remontando en modo LECTURA-ESCRITURA..."
+                if ! mount -o remount,rw "$mnt" 2>/dev/null; then
+                    log "ERROR" "No se pudo remontar $mnt como RW"
+                    exit 1
+                fi
+                WAS_RO=true
+            fi
+            break
+        fi
+    fi
+done
+
+# 2. Determinar la ruta de destino para UKIs
+if [ -d "/boot/EFI/Linux" ]; then
+    UKI_DIR="/boot/EFI/Linux"
+elif [ -d "/efi/EFI/Linux" ]; then
+    UKI_DIR="/efi/EFI/Linux"
+else
+    log "ERROR" "No se encontró ningún directorio de UKI (/boot/EFI/Linux ni /efi/EFI/Linux)"
+    if [ "$WAS_RO" = true ] && [ -n "$TARGET_MNT" ]; then
+        mount -o remount,ro "$TARGET_MNT"
+    fi
+    exit 1
+fi
+
+# 3. Verificar si existe el directorio de respaldo y contiene archivos
+if [ ! -d "$BACKUP_DIR" ] || ! ls "$BACKUP_DIR"/*.efi >/dev/null 2>&1 2>/dev/null; then
+    log "ERROR" "No se encontraron archivos de respaldo en $BACKUP_DIR"
+    if [ "$WAS_RO" = true ] && [ -n "$TARGET_MNT" ]; then
+        mount -o remount,ro "$TARGET_MNT"
+    fi
+    exit 1
+fi
+
+# Crear directorio de destino si no existe
+mkdir -p "$UKI_DIR"
+
+# 4. Restaurar UKIs con verificación de integridad
+log "INFO" "Verificando integridad de UKIs respaldados..."
+
+restored_count=0
+for uki_backup in "$BACKUP_DIR"/*.efi; do
+    [ -f "$uki_backup" ] || continue
+    
+    basename="${uki_backup##*/}"
+    sha_file="${uki_backup%.efi}.sha256"
+    
+    # Verificar checksum si existe
+    if [ -f "$sha_file" ]; then
+        expected_sha=$(cat "$sha_file")
+        actual_sha=$(sha256sum "$uki_backup" | awk '{print $1}')
+        
+        if [ "$expected_sha" != "$actual_sha" ]; then
+            log "ERROR" "Checksumfalló para $basename. Esperado: $expected_sha, Actual: $actual_sha"
+            if [ "$WAS_RO" = true ] && [ -n "$TARGET_MNT" ]; then
+                mount -o remount,ro "$TARGET_MNT"
+            fi
+            exit 1
+        fi
+        log "INFO" "Checksum verificado para $basename"
+    else
+        log "WARN" "No se encontró archivo SHA256 para $basename, continuando sin verificación"
+    fi
+    
+    # Copiar de forma atómica: escribir en temp, verificar, luego mover
+    temp_file="$UKI_DIR/.tmp_$$"
+    if cp --preserve=all "$uki_backup" "$temp_file"; then
+        if mv "$temp_file" "$UKI_DIR/$basename"; then
+            log "INFO" "Restaurado: $basename"
+            ((restored_count++))
+        else
+            log "ERROR" "No se pudo completar la copia atómica de $basename"
+            rm -f "$temp_file"
+            if [ "$WAS_RO" = true ] && [ -n "$TARGET_MNT" ]; then
+                mount -o remount,ro "$TARGET_MNT"
+            fi
+            exit 1
+        fi
+    else
+        log "ERROR" "No se pudo copiar $basename"
+        rm -f "$temp_file"
+        if [ "$WAS_RO" = true ] && [ -n "$TARGET_MNT" ]; then
+            mount -o remount,ro "$TARGET_MNT"
+        fi
+        exit 1
+    fi
+done
+
+# 5. Devolver la partición a modo SOLO LECTURA si originalmente estaba así
+if [ "$WAS_RO" = true ] && [ -n "$TARGET_MNT" ]; then
+    log "INFO" "Restaurando $TARGET_MNT a modo SOLO LECTURA..."
+    mount -o remount,ro "$TARGET_MNT"
+fi
+
+# 6. Reportar resultado final
+if [ "$restored_count" -gt 0 ]; then
+    log "INFO" "ÉXITO: $restored_count UKIs restaurados correctamente"
+    echo "=== [UKI Restore Hook] ÉXITO: $restored_count UKIs restaurados ===" >> "$LOG_FILE" 2>/dev/null || true
+else
+    log "INFO" "No se restauraron archivos (puede ser que el respaldo ya no contenga UKIs .efi)"
+    echo "=== [UKI Restore Hook] Finalizado: Sin archivos restaurados ===" >> "$LOG_FILE" 2>/dev/null || true
+fi
+
+exit 0

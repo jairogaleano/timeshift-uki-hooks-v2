@@ -1,0 +1,78 @@
+#!/bin/bash
+#
+# Timeshift UKI Hooks v2
+# Backup Hook - Copia UKIs a /etc antes del snapshot
+#
+# Contexto: Timeshift crea snapshots de Btrfs que protegen /, pero no la partición EFI (ESP)
+# donde residen los UKIs. Este hook respalda los UKIs actuales en /etc/timeshift/uki-backup/
+# para que se incluyan en el snapshot de Btrfs y puedan restaurarse posteriormente.
+#
+
+set -euo pipefail
+
+# --- CONFIGURACIÓN ---
+UKI_DIR="/boot/EFI/Linux"
+if [ ! -d "$UKI_DIR" ]; then
+    UKI_DIR="/efi/EFI/Linux"
+fi
+
+BACKUP_DIR="/etc/timeshift/uki-backup"
+LOG_FILE="/var/log/timeshift.log"
+# ----------------------
+
+log() {
+    local level="$1"
+    shift
+    local message="$*"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [UKI Backup Hook] [$level] $message"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [UKI Backup Hook] [$level] $message" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+# Asegurar que el directorio de respaldo existe
+mkdir -p "$BACKUP_DIR"
+
+# Limpiar respaldos anteriores con rotación (conservar último)
+if ls "$BACKUP_DIR"/*.efi >/dev/null 2>&1; then
+    for uki in "$BACKUP_DIR"/*.efi; do
+        # Guardar timestamp en nombre para rotación
+        basename="${uki##*/}"
+        timestamp=$(date +%s)
+        mv "$uki" "${BACKUP_DIR}/${basename%.efi}.bak.${timestamp}.efi"
+    done
+fi
+
+# Verificar si existen imágenes UKI en la ruta de origen
+if [ -d "$UKI_DIR" ] && ls "$UKI_DIR"/*.efi >/dev/null 2>&1; then
+    log "INFO" "Iniciando respaldo de UKIs desde $UKI_DIR"
+    
+    cp_count=0
+    for uki in "$UKI_DIR"/*.efi; do
+        [ -f "$uki" ] || continue
+        
+        basename="${uki##*/}"
+        
+        # Copiar archivo con verificación
+        if cp --preserve=all "$uki" "$BACKUP_DIR/$basename"; then
+            # Calcular checksum y guardarlo
+            sha256sum "$uki" | awk '{print $1}' > "$BACKUP_DIR/$basename.sha256"
+            log "INFO" "Respaldo exitoso: $basename (SHA256: $(cat "$BACKUP_DIR/$basename.sha256"))"
+            ((cp_count++))
+        else
+            log "ERROR" "Fallo en copia de: $basename"
+            exit 1
+        fi
+    done
+    
+    if [ "$cp_count" -gt 0 ]; then
+        log "INFO" "Total de UKIs respaldados: $cp_count"
+        echo "=== [UKI Backup Hook] Finalizado: $cp_countUKIs respaldados ===" >> "$LOG_FILE" 2>/dev/null || true
+    else
+        log "INFO" "No se encontraron UKIs 新 archivos .efi) en $UKI_DIR"
+        echo "=== [UKI Backup Hook] Finalizado: No se encontraron UKIs ===" >> "$LOG_FILE" 2>/dev/null || true
+    fi
+else
+    log "WARN" "No se encontraron archivos UKI (.efi) en $UKI_DIR"
+    echo "=== [UKI Backup Hook] Finalizado: No se encontraron UKIs ===" >> "$LOG_FILE" 2>/dev/null || true
+fi
+
+exit 0
