@@ -264,12 +264,12 @@ Todos con Btrfs + Timeshift + Secure Boot.
 
 ## 📄 Licencia
 
-Este software está disponible bajo la licencia MIT.
+Este software está bajo la licencia **GNU General Public License v3.0**. Consulta el archivo `LICENSE` para más detalles.
 
 **Avisos**: 
-- No se responsable de daños en el sistema
-- Siempre verificar logs después de actualizaciones críticas
-- Si el hook falla, el sistema no arrancará (Timeshift marcará error)
+- No me hago responsable de daños en el sistema.
+- Siempre verificar logs después de actualizaciones críticas.
+- Si el hook falla, el sistema no arrancará (Timeshift marcará error).
 
 ---
 

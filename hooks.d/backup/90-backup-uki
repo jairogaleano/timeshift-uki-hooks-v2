@@ -1,7 +1,20 @@
 #!/bin/bash
 #
-# Timeshift UKI Hooks v2
-# Backup Hook - Copia UKIs a /etc antes del snapshot
+# Timeshift UKI Hooks - Backup Script (v2)
+# Copyright (C) 2026 Jairo Galeano
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 # Contexto: Timeshift crea snapshots de Btrfs que protegen /, pero no la partición EFI (ESP)
 # donde residen los UKIs. Este hook respalda los UKIs actuales en /etc/timeshift/uki-backup/
@@ -34,6 +47,7 @@ mkdir -p "$BACKUP_DIR"
 # Limpiar respaldos anteriores con rotación (conservar último)
 if ls "$BACKUP_DIR"/*.efi >/dev/null 2>&1; then
     for uki in "$BACKUP_DIR"/*.efi; do
+        [ -f "$uki" ] || continue
         # Guardar timestamp en nombre para rotación
         basename="${uki##*/}"
         timestamp=$(date +%s)
@@ -65,9 +79,9 @@ if [ -d "$UKI_DIR" ] && ls "$UKI_DIR"/*.efi >/dev/null 2>&1; then
     
     if [ "$cp_count" -gt 0 ]; then
         log "INFO" "Total de UKIs respaldados: $cp_count"
-        echo "=== [UKI Backup Hook] Finalizado: $cp_countUKIs respaldados ===" >> "$LOG_FILE" 2>/dev/null || true
+        echo "=== [UKI Backup Hook] Finalizado: $cp_count UKIs respaldados ===" >> "$LOG_FILE" 2>/dev/null || true
     else
-        log "INFO" "No se encontraron UKIs 新 archivos .efi) en $UKI_DIR"
+        log "INFO" "No se encontraron UKIs (archivos .efi) en $UKI_DIR"
         echo "=== [UKI Backup Hook] Finalizado: No se encontraron UKIs ===" >> "$LOG_FILE" 2>/dev/null || true
     fi
 else

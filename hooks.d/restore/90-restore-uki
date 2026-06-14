@@ -1,7 +1,20 @@
 #!/bin/bash
 #
-# Timeshift UKI Hooks v2
-# Restore Hook - Restaura UKIs a la ESP después de la restauración
+# Timeshift UKI Hooks - Restore Script (v2)
+# Copyright (C) 2026 Jairo Galeano
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 # Contexto: Después de restaurar un snapshot de Btrfs, este script recupera los UKIs
 # que estaban guardados en /etc/timeshift/uki-backup/ (incluidos en el snapshot) y los
@@ -99,7 +112,7 @@ for uki_backup in "$BACKUP_DIR"/*.efi; do
         actual_sha=$(sha256sum "$uki_backup" | awk '{print $1}')
         
         if [ "$expected_sha" != "$actual_sha" ]; then
-            log "ERROR" "Checksumfalló para $basename. Esperado: $expected_sha, Actual: $actual_sha"
+            log "ERROR" "Checksum falló para $basename. Esperado: $expected_sha, Actual: $actual_sha"
             if [ "$WAS_RO" = true ] && [ -n "$TARGET_MNT" ]; then
                 mount -o remount,ro "$TARGET_MNT"
             fi
