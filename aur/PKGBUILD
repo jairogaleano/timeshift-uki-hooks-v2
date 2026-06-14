@@ -1,0 +1,37 @@
+# Maintainer: Jairo Galeano <jairogaleano@gmail.com>
+pkgname=timeshift-uki-hooks-git
+pkgver=9a4da77
+pkgrel=1
+pkgdesc="Hooks inteligentes para Timeshift que sincronizan imágenes UKI (Unified Kernel Images) con snapshots Btrfs"
+arch=('any')
+url="https://github.com/jairogaleano/timeshift-uki-hooks-v2"
+license=('GPL3')
+depends=('timeshift' 'bash' 'coreutils')
+makedepends=('git')
+provides=('timeshift-uki-hooks')
+conflicts=('timeshift-uki-hooks')
+source=("git+https://github.com/jairogaleano/timeshift-uki-hooks-v2.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "timeshift-uki-hooks-v2"
+  git describe --long --always --tags | sed 's/\([^-]*-g\)/r\1/;s/-/./g' || printf "2.1.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+package() {
+  cd "timeshift-uki-hooks-v2"
+  
+  # Crear directorios en el sistema de destino
+  install -d "${pkgdir}/etc/timeshift/backup-hooks.d"
+  install -d "${pkgdir}/etc/timeshift/restore-hooks.d"
+  
+  # Instalar los scripts con los permisos adecuados
+  install -m755 hooks.d/backup/90-backup-uki "${pkgdir}/etc/timeshift/backup-hooks.d/90-backup-uki"
+  install -m755 hooks.d/restore/90-restore-uki "${pkgdir}/etc/timeshift/restore-hooks.d/90-restore-uki"
+  
+  # Documentación y Licencia
+  install -d "${pkgdir}/usr/share/licenses/${pkgname}"
+  install -m644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE" 2>/dev/null || true
+  install -d "${pkgdir}/usr/share/doc/${pkgname}"
+  install -m644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}
