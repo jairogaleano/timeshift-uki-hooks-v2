@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Timeshift UKI Hooks - Backup Script (v2)
+# Timeshift UKI Hooks - Backup Script (v2.1)
 # Copyright (C) 2026 Jairo Galeano
 #
 # This program is free software: you can redistribute it and/or modify
@@ -44,7 +44,43 @@ log() {
 # Asegurar que el directorio de respaldo existe
 mkdir -p "$BACKUP_DIR"
 
-# Limpiar respaldos anteriores con rotación (conservar último)
+# NUEVA VERIFICACIÓN: Omitir si el archivo actual es idéntico al respaldo más reciente
+skipped_count=0
+copy_needed=false
+
+# Verificar si existen imágenes UKI en la ruta de origen
+if [ -d "$UKI_DIR" ] && ls "$UKI_DIR"/*.efi >/dev/null 2>&1; then
+    log "INFO" "Iniciando análisis de UKIs en $UKI_DIR"
+    
+    for uki in "$UKI_DIR"/*.efi; do
+        [ -f "$uki" ] || continue
+        basename="${uki##*/}"
+        
+        # Si el archivo existe en el backup, comparar checksums
+        if [ -f "$BACKUP_DIR/$basename" ]; then
+            current_sha=$(sha256sum "$uki" | awk '{print $1}')
+            backup_sha=$(sha256sum "$BACKUP_DIR/$basename" | awk '{print $1}')
+            
+            if [ "$current_sha" == "$backup_sha" ]; then
+                log "INFO" "$basename es idéntico al respaldo actual. No se requiere nuevo respaldo."
+                continue
+            fi
+        fi
+        copy_needed=true
+        break
+    done
+else
+    log "WARN" "No se encontraron archivos UKI (.efi) en $UKI_DIR"
+    exit 0
+fi
+
+if [ "$copy_needed" = false ]; then
+    log "INFO" "Todos los UKIs están actualizados en el respaldo. Saltando proceso de copia."
+    echo "=== [UKI Backup Hook] Finalizado: Sin cambios detectados, respaldo omitido ===" >> "$LOG_FILE" 2>/dev/null || true
+    exit 0
+fi
+
+# Limpiar respaldos anteriores con rotación (solo si vamos a copiar algo nuevo)
 if ls "$BACKUP_DIR"/*.efi >/dev/null 2>&1; then
     for uki in "$BACKUP_DIR"/*.efi; do
         [ -f "$uki" ] || continue

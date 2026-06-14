@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Timeshift UKI Hooks - Restore Script (v2)
+# Timeshift UKI Hooks - Restore Script (v2.1)
 # Copyright (C) 2026 Jairo Galeano
 #
 # This program is free software: you can redistribute it and/or modify
@@ -121,6 +121,15 @@ for uki_backup in "$BACKUP_DIR"/*.efi; do
         log "INFO" "Checksum verificado para $basename"
     else
         log "WARN" "No se encontró archivo SHA256 para $basename, continuando sin verificación"
+    fi
+    
+    # NUEVA VERIFICACIÓN: Saltar si el archivo ya existe y es idéntico
+    if [ -f "$UKI_DIR/$basename" ]; then
+        current_sha=$(sha256sum "$UKI_DIR/$basename" | awk '{print $1}')
+        if [ "$current_sha" == "$expected_sha" ]; then
+            log "INFO" "El archivo $basename ya existe y es idéntico en el destino. Saltando."
+            continue
+        fi
     fi
     
     # Copiar de forma atómica: escribir en temp, verificar, luego mover
