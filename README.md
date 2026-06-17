@@ -59,6 +59,13 @@ El instalador se encarga de:
 
 ---
 
+## ✨ Novedades en v2.3
+
+- **Backup hook**: Eliminada rotación de backups (`.bak`) que acumulaba archivos sin límite en cada snapshot.
+- **Backup hook**: Eliminado bloque duplicado de verificación de directorio (código muerto).
+- **Install.sh**: Agregado `SCRIPT_DIR` para rutas absolutas, ahora funciona desde cualquier directorio.
+- **AUR**: Actualizado `.SRCINFO` y `PKGBUILD` a v2.3.
+
 ## ✨ Novedades en v2.2
 
 - **Fix crítico**: Variable `expected_sha` inicializada correctamente para evitar `unbound variable` en restore hook.

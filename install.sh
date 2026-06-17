@@ -33,5 +33,5 @@ echo "Aplicando permisos de ejecución..."
 chmod +x /etc/timeshift/backup-hooks.d/90-backup-uki
 chmod +x /etc/timeshift/restore-hooks.d/90-restore-uki
 
-echo "Instalación/Actualización a v2.2 completada correctamente."
+echo "Instalación/Actualización a v2.3 completada correctamente."
 echo "Los hooks han sido instalados con nombres estándar para compatibilidad con run-parts."
