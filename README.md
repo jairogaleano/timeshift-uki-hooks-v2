@@ -11,7 +11,7 @@ Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Uni
 - [Instalación](#instalación)
 - [Novedades en v2.2](#novedades-en-v21)
 - [Seguridad](#seguridad)
-- [Depuración](#depuración)
+- [Depuración e Integración de Logs](#depuración-e-integración-de-logs)
 - [Licencia](#licencia)
 
 ---
@@ -76,7 +76,13 @@ El instalador se encarga de:
 
 ---
 
-## 🔧 Depuración
+## 🔧 Depuración e Integración de Logs
+
+Este proyecto se integra directamente con el sistema de registros de **Timeshift** para facilitar el mantenimiento y la visibilidad:
+
+- **Logs Unificados**: Los mensajes de los hooks se inyectan en `/var/log/timeshift.log`. Esto permite ver en un solo lugar tanto las acciones de Timeshift como el estado de la sincronización de los UKIs.
+- **Rotación Automática**: Timeshift gestiona internamente la limpieza y rotación de estos logs (manteniendo las últimas sesiones). Al integrarse aquí, los registros de este proyecto se depuran automáticamente, evitando el crecimiento indefinido de archivos en `/var/log`.
+- **Enlace Simbólico**: El script escribe en `/var/log/timeshift.log`, que es el puntero estándar de Timeshift hacia el log de la ejecución actual.
 
 Ver logs en tiempo real:
 ```bash
