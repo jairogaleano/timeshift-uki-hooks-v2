@@ -1,4 +1,4 @@
-# Timeshift UKI Hooks v2.2
+# Timeshift UKI Hooks v2.3
 
 Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Unified Kernel Images)** en sistemas con **Btrfs + Secure Boot**.
 

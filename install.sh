@@ -1,16 +1,18 @@
 #!/bin/bash
 #
-# Timeshift UKI Hooks - Instalador v2.1
+# Timeshift UKI Hooks - Instalador v2.3
 #
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if [ "$EUID" -ne 0 ]; then
   echo "Por favor, ejecuta como root (sudo ./install.sh)"
   exit 1
 fi
 
-echo "Instalando Timeshift UKI Hooks v2.2..."
+echo "Instalando Timeshift UKI Hooks v2.3..."
 
 # Crear directorios si no existen
 mkdir -p /etc/timeshift/backup-hooks.d
@@ -23,8 +25,8 @@ rm -f /etc/timeshift/restore-hooks.d/90-restore-uki*
 
 # Copiar scripts con nombres estándar
 echo "Copiando scripts..."
-cp hooks.d/backup/90-backup-uki /etc/timeshift/backup-hooks.d/
-cp hooks.d/restore/90-restore-uki /etc/timeshift/restore-hooks.d/
+cp "$SCRIPT_DIR/hooks.d/backup/90-backup-uki" /etc/timeshift/backup-hooks.d/
+cp "$SCRIPT_DIR/hooks.d/restore/90-restore-uki" /etc/timeshift/restore-hooks.d/
 
 # Aplicar permisos
 echo "Aplicando permisos de ejecución..."

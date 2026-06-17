@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Timeshift UKI Hooks - Backup Script (v2.2)
+# Timeshift UKI Hooks - Backup Script (v2.3)
 # Copyright (C) 2026 Jairo Galeano
 #
 # This program is free software: you can redistribute it and/or modify
@@ -41,25 +41,21 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [UKI Backup Hook] [$level] $message" >> "$LOG_FILE" 2>/dev/null || true
 }
 
-# Asegurar que el directorio de respaldo existe
 mkdir -p "$BACKUP_DIR"
 
-# Omitir si el archivo actual es idéntico al respaldo más reciente
 copy_needed=false
 
-# Verificar si existen imágenes UKI en la ruta de origen
 if [ -d "$UKI_DIR" ] && ls "$UKI_DIR"/*.efi >/dev/null 2>&1; then
     log "INFO" "Iniciando análisis de UKIs en $UKI_DIR"
-    
+
     for uki in "$UKI_DIR"/*.efi; do
         [ -f "$uki" ] || continue
         basename="${uki##*/}"
-        
-        # Si el archivo existe en el backup, comparar checksums
+
         if [ -f "$BACKUP_DIR/$basename" ]; then
             current_sha=$(sha256sum "$uki" | awk '{print $1}')
             backup_sha=$(sha256sum "$BACKUP_DIR/$basename" | awk '{print $1}')
-            
+
             if [ "$current_sha" == "$backup_sha" ]; then
                 log "INFO" "$basename es idéntico al respaldo actual. No se requiere nuevo respaldo."
                 continue
@@ -79,48 +75,29 @@ if [ "$copy_needed" = false ]; then
     exit 0
 fi
 
-# Limpiar respaldos anteriores con rotación (solo si vamos a copiar algo nuevo)
-if ls "$BACKUP_DIR"/*.efi >/dev/null 2>&1; then
-    for uki in "$BACKUP_DIR"/*.efi; do
-        [ -f "$uki" ] || continue
-        # Guardar timestamp en nombre para rotación
-        basename="${uki##*/}"
-        timestamp=$(date +%s)
-        mv "$uki" "${BACKUP_DIR}/${basename%.efi}.bak.${timestamp}.efi"
-    done
-fi
+log "INFO" "Iniciando respaldo de UKIs desde $UKI_DIR"
 
-# Verificar si existen imágenes UKI en la ruta de origen
-if [ -d "$UKI_DIR" ] && ls "$UKI_DIR"/*.efi >/dev/null 2>&1; then
-    log "INFO" "Iniciando respaldo de UKIs desde $UKI_DIR"
-    
-    cp_count=0
-    for uki in "$UKI_DIR"/*.efi; do
-        [ -f "$uki" ] || continue
-        
-        basename="${uki##*/}"
-        
-        # Copiar archivo con verificación
-        if cp --preserve=all "$uki" "$BACKUP_DIR/$basename"; then
-            # Calcular checksum y guardarlo
-            sha256sum "$uki" | awk '{print $1}' > "$BACKUP_DIR/$basename.sha256"
-            log "INFO" "Respaldo exitoso: $basename (SHA256: $(cat "$BACKUP_DIR/$basename.sha256"))"
-            cp_count=$((cp_count + 1))
-        else
-            log "ERROR" "Fallo en copia de: $basename"
-            exit 1
-        fi
-    done
-    
-    if [ "$cp_count" -gt 0 ]; then
-        log "INFO" "Total de UKIs respaldados: $cp_count"
-        echo "=== [UKI Backup Hook] Finalizado: $cp_count UKIs respaldados ===" >> "$LOG_FILE" 2>/dev/null || true
+cp_count=0
+for uki in "$UKI_DIR"/*.efi; do
+    [ -f "$uki" ] || continue
+
+    basename="${uki##*/}"
+
+    if cp --preserve=all "$uki" "$BACKUP_DIR/$basename"; then
+        sha256sum "$uki" | awk '{print $1}' > "$BACKUP_DIR/$basename.sha256"
+        log "INFO" "Respaldo exitoso: $basename"
+        cp_count=$((cp_count + 1))
     else
-        log "INFO" "No se encontraron UKIs (archivos .efi) en $UKI_DIR"
-        echo "=== [UKI Backup Hook] Finalizado: No se encontraron UKIs ===" >> "$LOG_FILE" 2>/dev/null || true
+        log "ERROR" "Fallo en copia de: $basename"
+        exit 1
     fi
+done
+
+if [ "$cp_count" -gt 0 ]; then
+    log "INFO" "Total de UKIs respaldados: $cp_count"
+    echo "=== [UKI Backup Hook] Finalizado: $cp_count UKIs respaldados ===" >> "$LOG_FILE" 2>/dev/null || true
 else
-    log "WARN" "No se encontraron archivos UKI (.efi) en $UKI_DIR"
+    log "INFO" "No se encontraron UKIs (archivos .efi) en $UKI_DIR"
     echo "=== [UKI Backup Hook] Finalizado: No se encontraron UKIs ===" >> "$LOG_FILE" 2>/dev/null || true
 fi
 
