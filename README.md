@@ -29,14 +29,15 @@ En sistemas Arch Linux con **systemd-boot** y **Secure Boot**, las imágenes UKI
 Este proyecto sincroniza los UKIs con los snapshots de Btrfs mediante hooks:
 
 1. **Backup Hook** (`/etc/timeshift/backup-hooks.d/90-backup-uki`)
-   - Se ejecuta **antes** de crear el snapshot.
-   - Respalda los UKIs en `/etc/timeshift/uki-backup/` (dentro del snapshot).
-   - **Inteligente**: Solo copia si detecta cambios (vía SHA256).
+   - Se ejecuta **antes** de crear el snapshot
+   - Copia **solo los UKIs que cambiaron** (comparación SHA256) a `/etc/timeshift/uki-backup/`
+   - Calcula checksums SHA256 para verificación futura
+   - Los UKIs se incluyen en el snapshot de Btrfs (porque `/etc` está dentro de `/`)
 
 2. **Restore Hook** (`/etc/timeshift/restore-hooks.d/90-restore-uki`)
-   - Se ejecuta **después** de restaurar.
-   - Devuelve los UKIs a la partición ESP.
-   - **Inteligente**: Salta archivos que ya son idénticos.
+   - Se ejecuta **después** de restaurar
+   - Devuelve los UKIs a la partición ESP (con copia atómica via `mktemp + mv`)
+   - **Inteligente**: Salta archivos que ya son idénticos en destino
 
 ---
 
@@ -61,17 +62,30 @@ El instalador se encarga de:
 
 ## ✨ Novedades en v2.3
 
-- **Backup hook**: Eliminada rotación de backups (`.bak`) que acumulaba archivos sin límite en cada snapshot.
-- **Backup hook**: Eliminado bloque duplicado de verificación de directorio (código muerto).
-- **Install.sh**: Agregado `SCRIPT_DIR` para rutas absolutas, ahora funciona desde cualquier directorio.
-- **AUR**: Actualizado `.SRCINFO` y `PKGBUILD` a v2.3.
+| Característica | v1 (anterior) | v2 (anterior) | v2.3 (actual) |
+|----------------|---------------|---------------|----------------|
+| **Checksums** | ❌ No | ✅ SHA256 por archivo | ✅ SHA256 por archivo |
+| **Logging** | ❌ Solo stdout | ✅ `/var/log/timeshift.log` | ✅ `/var/log/timeshift.log` |
+| **Atomicidad** | ❌ Copia directa `cp` | ✅ `cp temp → mv` | ✅ `cp temp → mv` (con `mktemp`) |
+| **Rotación** | ❌ Borra todo antes | ✅ Timestamps en nombres | ❌ No necesaria (SHA diff) |
+| **Copia selectiva** | ❌ Siempre copia todos | ❌ Siempre copia todos | ✅ Solo UKIs cambiados |
+| **Verificación** | ❌ Solo verifica existencia | ✅ Verifica checksums antes de copiar | ✅ Verifica checksums + skip si idéntico |
+| **Detección de errores** | ⚠️ Básica | ✅ `set -euo pipefail` | ✅ `set -euo pipefail` |
+
+Detalle de cambios:
+- **Backup hook**: Eliminada rotación de backups (`.bak`) que acumulaba archivos sin límite
+- **Backup hook**: Copia selectiva — solo respalda UKIs que realmente cambiaron (SHA256 per-file)
+- **Backup hook**: Eliminado bloque duplicado de verificación de directorio (código muerto)
+- **Restore hook**: Skip de archivos idénticos antes de copiar
+- **Restore hook**: `mktemp` en vez de temp fijo para evitar colisiones
+- **Install.sh**: Agregado `SCRIPT_DIR` para rutas absolutas, funciona desde cualquier directorio
 
 ## ✨ Novedades en v2.2
 
-- **Fix crítico**: Variable `expected_sha` inicializada correctamente para evitar `unbound variable` en restore hook.
-- **Seguridad**: Uso de `mktemp` en vez de `$$` para archivos temporales en restore hook.
-- **Skip condicional**: La comparación de checksums en restore salta archivos solo cuando SHA256 está disponible.
-- **Limpieza**: Eliminada variable `skipped_count` sin uso y redirección redundante en restore hook.
+- **Fix crítico**: Variable `expected_sha` inicializada correctamente para evitar `unbound variable` en restore hook
+- **Seguridad**: Uso de `mktemp` en vez de `$$` para archivos temporales en restore hook
+- **Skip condicional**: La comparación de checksums en restore salta archivos solo cuando SHA256 está disponible
+- **Limpieza**: Eliminada variable `skipped_count` sin uso y redirección redundante en restore hook
 
 ---
 

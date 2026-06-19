@@ -16,14 +16,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
-# Contexto: Timeshift crea snapshots de Btrfs que protegen /, pero no la partición EFI (ESP)
+# Contexto: Timeshift crea snapshots de Btrfs que protegen /, pero no la particion EFI (ESP)
 # donde residen los UKIs. Este hook respalda los UKIs actuales en /etc/timeshift/uki-backup/
 # para que se incluyan en el snapshot de Btrfs y puedan restaurarse posteriormente.
 #
 
 set -euo pipefail
 
-# --- CONFIGURACIÓN ---
+# --- CONFIGURACION ---
 UKI_DIR="/boot/EFI/Linux"
 if [ ! -d "$UKI_DIR" ]; then
     UKI_DIR="/efi/EFI/Linux"
@@ -43,12 +43,13 @@ log() {
 
 mkdir -p "$BACKUP_DIR"
 
-copy_needed=false
-
 if [ -d "$UKI_DIR" ] && ls "$UKI_DIR"/*.efi >/dev/null 2>&1; then
-    log "INFO" "Iniciando análisis de UKIs en $UKI_DIR"
+    log "INFO" "Iniciando analisis de UKIs en $UKI_DIR"
 
-    for uki in "$UKI_DIR"/*.efi; do
+    uki_files=("$UKI_DIR"/*.efi)
+    needs_backup=false
+
+    for uki in "${uki_files[@]}"; do
         [ -f "$uki" ] || continue
         basename="${uki##*/}"
 
@@ -57,20 +58,19 @@ if [ -d "$UKI_DIR" ] && ls "$UKI_DIR"/*.efi >/dev/null 2>&1; then
             backup_sha=$(sha256sum "$BACKUP_DIR/$basename" | awk '{print $1}')
 
             if [ "$current_sha" == "$backup_sha" ]; then
-                log "INFO" "$basename es idéntico al respaldo actual. No se requiere nuevo respaldo."
+                log "INFO" "$basename es identico al respaldo actual. No se requiere nuevo respaldo."
                 continue
             fi
         fi
-        copy_needed=true
-        break
+        needs_backup=true
     done
 else
     log "WARN" "No se encontraron archivos UKI (.efi) en $UKI_DIR"
     exit 0
 fi
 
-if [ "$copy_needed" = false ]; then
-    log "INFO" "Todos los UKIs están actualizados en el respaldo. Saltando proceso de copia."
+if [ "$needs_backup" = false ]; then
+    log "INFO" "Todos los UKIs estan actualizados en el respaldo. Saltando proceso de copia."
     echo "=== [UKI Backup Hook] Finalizado: Sin cambios detectados, respaldo omitido ===" >> "$LOG_FILE" 2>/dev/null || true
     exit 0
 fi
@@ -78,13 +78,21 @@ fi
 log "INFO" "Iniciando respaldo de UKIs desde $UKI_DIR"
 
 cp_count=0
-for uki in "$UKI_DIR"/*.efi; do
+for uki in "${uki_files[@]}"; do
     [ -f "$uki" ] || continue
 
     basename="${uki##*/}"
 
+    current_sha=$(sha256sum "$uki" | awk '{print $1}')
+    if [ -f "$BACKUP_DIR/$basename" ]; then
+        backup_sha=$(sha256sum "$BACKUP_DIR/$basename" | awk '{print $1}')
+        if [ "$current_sha" == "$backup_sha" ]; then
+            continue
+        fi
+    fi
+
     if cp --preserve=all "$uki" "$BACKUP_DIR/$basename"; then
-        sha256sum "$uki" | awk '{print $1}' > "$BACKUP_DIR/$basename.sha256"
+        echo "$current_sha" > "$BACKUP_DIR/$basename.sha256"
         log "INFO" "Respaldo exitoso: $basename"
         cp_count=$((cp_count + 1))
     else

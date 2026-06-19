@@ -16,9 +16,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
-# Contexto: Después de restaurar un snapshot de Btrfs, este script recupera los UKIs
+# Contexto: Despues de restaurar un snapshot de Btrfs, este script recupera los UKIs
 # que estaban guardados en /etc/timeshift/uki-backup/ (incluidos en el snapshot) y los
-# devuelve a la partición EFI (ESP) para que coincidan con el kernel/módulos restaurados.
+# devuelve a la particion EFI (ESP) para que coincidan con el kernel/modulos restaurados.
 #
 # Seguridad: Los UKIs ya estaban verificados por Secure Boot antes de ser respaldados.
 # Este script solo restaura archivos existentes y calcula checksums para verificar integridad.
@@ -38,12 +38,12 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [UKI Restore Hook] [$level] $message" >> "$LOG_FILE" 2>/dev/null || true
 }
 
-echo "=== [UKI Restore Hook] Iniciando restauración ===" >> "$LOG_FILE" 2>/dev/null || true
+echo "=== [UKI Restore Hook] Iniciando restauracion ===" >> "$LOG_FILE" 2>/dev/null || true
 
 WAS_RO=false
 TARGET_MNT=""
 
-# 1. Asegurar el montaje de la partición de arranque
+# 1. Asegurar el montaje de la particion de arranque
 for mnt in /boot /efi; do
     if [ -d "$mnt" ] && [ ! -L "$mnt" ]; then
         if ! mountpoint -q "$mnt" 2>/dev/null; then
@@ -56,10 +56,9 @@ for mnt in /boot /efi; do
 
         if mountpoint -q "$mnt" 2>/dev/null; then
             TARGET_MNT="$mnt"
-            
-            # Comprobar si está montado en modo solo lectura (ro)
+
             if findmnt -O ro "$mnt" >/dev/null 2>&1; then
-                log "INFO" "$mnt está montado como SOLO LECTURA. Remontando en modo LECTURA-ESCRITURA..."
+                log "INFO" "$mnt esta montado como SOLO LECTURA. Remontando en modo LECTURA-ESCRITURA..."
                 if ! mount -o remount,rw "$mnt" 2>/dev/null; then
                     log "ERROR" "No se pudo remontar $mnt como RW"
                     exit 1
@@ -77,7 +76,7 @@ if [ -d "/boot/EFI/Linux" ]; then
 elif [ -d "/efi/EFI/Linux" ]; then
     UKI_DIR="/efi/EFI/Linux"
 else
-    log "ERROR" "No se encontró ningún directorio de UKI (/boot/EFI/Linux ni /efi/EFI/Linux)"
+    log "ERROR" "No se encontro ningun directorio de UKI (/boot/EFI/Linux ni /efi/EFI/Linux)"
     if [ "$WAS_RO" = true ] && [ -n "$TARGET_MNT" ]; then
         mount -o remount,ro "$TARGET_MNT"
     fi
@@ -93,27 +92,25 @@ if [ ! -d "$BACKUP_DIR" ] || ! ls "$BACKUP_DIR"/*.efi >/dev/null 2>&1; then
     exit 1
 fi
 
-# Crear directorio de destino si no existe
 mkdir -p "$UKI_DIR"
 
-# 4. Restaurar UKIs con verificación de integridad
+# 4. Restaurar UKIs con verificacion de integridad
 log "INFO" "Verificando integridad de UKIs respaldados..."
 
 restored_count=0
 for uki_backup in "$BACKUP_DIR"/*.efi; do
     [ -f "$uki_backup" ] || continue
-    
+
     basename="${uki_backup##*/}"
     sha_file="${uki_backup%.efi}.sha256"
     expected_sha=""
-    
-    # Verificar checksum si existe
+
     if [ -f "$sha_file" ]; then
         expected_sha=$(cat "$sha_file")
         actual_sha=$(sha256sum "$uki_backup" | awk '{print $1}')
-        
+
         if [ "$expected_sha" != "$actual_sha" ]; then
-            log "ERROR" "Checksum falló para $basename. Esperado: $expected_sha, Actual: $actual_sha"
+            log "ERROR" "Checksum fallo para $basename. Esperado: $expected_sha, Actual: $actual_sha"
             if [ "$WAS_RO" = true ] && [ -n "$TARGET_MNT" ]; then
                 mount -o remount,ro "$TARGET_MNT"
             fi
@@ -121,26 +118,26 @@ for uki_backup in "$BACKUP_DIR"/*.efi; do
         fi
         log "INFO" "Checksum verificado para $basename"
     else
-        log "WARN" "No se encontró archivo SHA256 para $basename, continuando sin verificación"
+        log "WARN" "No se encontro archivo SHA256 para $basename, continuando sin verificacion"
     fi
-    
-    # Saltar si el archivo ya existe y es idéntico
+
+    # Saltar si el archivo ya existe y es identico
     if [ -f "$UKI_DIR/$basename" ]; then
         current_sha=$(sha256sum "$UKI_DIR/$basename" | awk '{print $1}')
         if [ -n "$expected_sha" ] && [ "$current_sha" == "$expected_sha" ]; then
-            log "INFO" "El archivo $basename ya existe y es idéntico en el destino. Saltando."
+            log "INFO" "El archivo $basename ya existe y es identico en el destino. Saltando."
             continue
         fi
     fi
-    
-    # Copiar de forma atómica: escribir en temp, verificar, luego mover
+
+    # Copiar de forma atomica: escribir en temp, verificar, luego mover
     temp_file="$(mktemp "$UKI_DIR/.tmp_XXXXXXXX")"
     if cp --preserve=all "$uki_backup" "$temp_file"; then
         if mv "$temp_file" "$UKI_DIR/$basename"; then
             log "INFO" "Restaurado: $basename"
             ((restored_count++))
         else
-            log "ERROR" "No se pudo completar la copia atómica de $basename"
+            log "ERROR" "No se pudo completar la copia atomica de $basename"
             rm -f "$temp_file"
             if [ "$WAS_RO" = true ] && [ -n "$TARGET_MNT" ]; then
                 mount -o remount,ro "$TARGET_MNT"
@@ -157,7 +154,7 @@ for uki_backup in "$BACKUP_DIR"/*.efi; do
     fi
 done
 
-# 5. Devolver la partición a modo SOLO LECTURA si originalmente estaba así
+# 5. Devolver la particion a modo SOLO LECTURA si originalmente estaba asi
 if [ "$WAS_RO" = true ] && [ -n "$TARGET_MNT" ]; then
     log "INFO" "Restaurando $TARGET_MNT a modo SOLO LECTURA..."
     mount -o remount,ro "$TARGET_MNT"
@@ -165,8 +162,8 @@ fi
 
 # 6. Reportar resultado final
 if [ "$restored_count" -gt 0 ]; then
-    log "INFO" "ÉXITO: $restored_count UKIs restaurados correctamente"
-    echo "=== [UKI Restore Hook] ÉXITO: $restored_count UKIs restaurados ===" >> "$LOG_FILE" 2>/dev/null || true
+    log "INFO" "EXITO: $restored_count UKIs restaurados correctamente"
+    echo "=== [UKI Restore Hook] EXITO: $restored_count UKIs restaurados ===" >> "$LOG_FILE" 2>/dev/null || true
 else
     log "INFO" "No se restauraron archivos (puede ser que el respaldo ya no contenga UKIs .efi)"
     echo "=== [UKI Restore Hook] Finalizado: Sin archivos restaurados ===" >> "$LOG_FILE" 2>/dev/null || true
