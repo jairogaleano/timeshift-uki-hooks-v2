@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Timeshift UKI Hooks - Backup Script (v2.3)
+# Timeshift UKI Hooks - Backup Script (v2.4)
 # Copyright (C) 2026 Jairo Galeano
 #
 # This program is free software: you can redistribute it and/or modify
@@ -16,19 +16,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
-# Contexto: Timeshift crea snapshots de Btrfs que protegen /, pero no la partición EFI (ESP)
+# Contexto: Timeshift crea snapshots de Btrfs que protegen /, pero no la particion EFI (ESP)
 # donde residen los UKIs. Este hook respalda los UKIs actuales en /etc/timeshift/uki-backup/
 # para que se incluyan en el snapshot de Btrfs y puedan restaurarse posteriormente.
 #
 
 set -euo pipefail
 
-# --- CONFIGURACIÓN ---
-UKI_DIR="/boot/EFI/Linux"
-if [ ! -d "$UKI_DIR" ]; then
-    UKI_DIR="/efi/EFI/Linux"
-fi
-
+# --- CONFIGURACION ---
 BACKUP_DIR="/etc/timeshift/uki-backup"
 LOG_FILE="/var/log/timeshift.log"
 # ----------------------
@@ -41,50 +36,97 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [UKI Backup Hook] [$level] $message" >> "$LOG_FILE" 2>/dev/null || true
 }
 
+detect_uki_dir() {
+    local dirs=("/boot/EFI/Linux" "/efi/EFI/Linux" "/boot/efi/EFI/Linux")
+    for d in "${dirs[@]}"; do
+        if [ -d "$d" ]; then
+            echo "$d"
+            return 0
+        fi
+    done
+    local esp
+    esp=$(findmnt -no TARGET -t vfat 2>/dev/null | while read -r mnt; do
+        if [ -d "$mnt/EFI/Linux" ]; then echo "$mnt"; break; fi
+    done)
+    if [ -n "$esp" ]; then
+        echo "$esp/EFI/Linux"
+        return 0
+    fi
+    return 1
+}
+
 mkdir -p "$BACKUP_DIR"
 
-copy_needed=false
+UKI_DIR=$(detect_uki_dir) || true
+if [ -z "$UKI_DIR" ]; then
+    log "WARN" "No se pudo detectar el directorio de UKIs"
+    exit 0
+fi
 
-if [ -d "$UKI_DIR" ] && ls "$UKI_DIR"/*.efi >/dev/null 2>&1; then
-    log "INFO" "Iniciando análisis de UKIs en $UKI_DIR"
+log "INFO" "UKI directory detectado: $UKI_DIR"
 
-    for uki in "$UKI_DIR"/*.efi; do
-        [ -f "$uki" ] || continue
-        basename="${uki##*/}"
+shopt -s nullglob
+uki_files=("$UKI_DIR"/*.efi)
+shopt -u nullglob
 
-        if [ -f "$BACKUP_DIR/$basename" ]; then
-            current_sha=$(sha256sum "$uki" | awk '{print $1}')
-            backup_sha=$(sha256sum "$BACKUP_DIR/$basename" | awk '{print $1}')
-
-            if [ "$current_sha" == "$backup_sha" ]; then
-                log "INFO" "$basename es idéntico al respaldo actual. No se requiere nuevo respaldo."
-                continue
-            fi
-        fi
-        copy_needed=true
-        break
-    done
-else
+if [ ${#uki_files[@]} -eq 0 ]; then
     log "WARN" "No se encontraron archivos UKI (.efi) en $UKI_DIR"
     exit 0
 fi
 
-if [ "$copy_needed" = false ]; then
-    log "INFO" "Todos los UKIs están actualizados en el respaldo. Saltando proceso de copia."
+log "INFO" "Iniciando analisis de UKIs en $UKI_DIR"
+
+needs_backup=false
+for uki in "${uki_files[@]}"; do
+    [ -f "$uki" ] || continue
+    basename="${uki##*/}"
+
+    if [ -f "$BACKUP_DIR/$basename" ]; then
+        current_sha=$(sha256sum "$uki" | awk '{print $1}')
+        backup_sha=$(sha256sum "$BACKUP_DIR/$basename" | awk '{print $1}')
+
+        if [ "$current_sha" == "$backup_sha" ]; then
+            log "INFO" "$basename es identico al respaldo actual. No se requiere nuevo respaldo."
+            continue
+        fi
+    fi
+    needs_backup=true
+done
+
+if [ "$needs_backup" = false ]; then
+    log "INFO" "Todos los UKIs estan actualizados en el respaldo. Saltando proceso de copia."
     echo "=== [UKI Backup Hook] Finalizado: Sin cambios detectados, respaldo omitido ===" >> "$LOG_FILE" 2>/dev/null || true
     exit 0
 fi
 
 log "INFO" "Iniciando respaldo de UKIs desde $UKI_DIR"
 
+# Limpiar archivos .sha256 huerfanos (de UKIs que ya no existen)
+for sha_file in "$BACKUP_DIR"/*.sha256; do
+    [ -f "$sha_file" ] || continue
+    efi_file="${sha_file%.sha256}"
+    if [ ! -f "$efi_file" ]; then
+        rm -f "$sha_file"
+        log "INFO" "Limpiado .sha256 huerfano: ${sha_file##*/}"
+    fi
+done
+
 cp_count=0
-for uki in "$UKI_DIR"/*.efi; do
+for uki in "${uki_files[@]}"; do
     [ -f "$uki" ] || continue
 
     basename="${uki##*/}"
 
+    current_sha=$(sha256sum "$uki" | awk '{print $1}')
+    if [ -f "$BACKUP_DIR/$basename" ]; then
+        backup_sha=$(sha256sum "$BACKUP_DIR/$basename" | awk '{print $1}')
+        if [ "$current_sha" == "$backup_sha" ]; then
+            continue
+        fi
+    fi
+
     if cp --preserve=all "$uki" "$BACKUP_DIR/$basename"; then
-        sha256sum "$uki" | awk '{print $1}' > "$BACKUP_DIR/$basename.sha256"
+        echo "$current_sha" > "$BACKUP_DIR/$basename.sha256"
         log "INFO" "Respaldo exitoso: $basename"
         cp_count=$((cp_count + 1))
     else
@@ -97,8 +139,8 @@ if [ "$cp_count" -gt 0 ]; then
     log "INFO" "Total de UKIs respaldados: $cp_count"
     echo "=== [UKI Backup Hook] Finalizado: $cp_count UKIs respaldados ===" >> "$LOG_FILE" 2>/dev/null || true
 else
-    log "INFO" "No se encontraron UKIs (archivos .efi) en $UKI_DIR"
-    echo "=== [UKI Backup Hook] Finalizado: No se encontraron UKIs ===" >> "$LOG_FILE" 2>/dev/null || true
+    log "INFO" "No se respaldaron UKIs nuevos"
+    echo "=== [UKI Backup Hook] Finalizado: Sin cambios ===" >> "$LOG_FILE" 2>/dev/null || true
 fi
 
 exit 0

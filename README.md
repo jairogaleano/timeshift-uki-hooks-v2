@@ -1,4 +1,4 @@
-# Timeshift UKI Hooks v2.3
+# Timeshift UKI Hooks v2.4
 
 Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Unified Kernel Images)** en sistemas con **Btrfs + Secure Boot**.
 
@@ -9,7 +9,8 @@ Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Uni
 - [Cómo funciona](#cómo-funciona)
 - [Requisitos](#requisitos)
 - [Instalación](#instalación)
-- [Novedades en v2.2](#novedades-en-v21)
+- [Novedades en v2.4](#novedades-en-v24)
+- [Novedades en v2.3](#novedades-en-v23)
 - [Seguridad](#seguridad)
 - [Depuración e Integración de Logs](#depuración-e-integración-de-logs)
 - [Licencia](#licencia)
@@ -29,14 +30,18 @@ En sistemas Arch Linux con **systemd-boot** y **Secure Boot**, las imágenes UKI
 Este proyecto sincroniza los UKIs con los snapshots de Btrfs mediante hooks:
 
 1. **Backup Hook** (`/etc/timeshift/backup-hooks.d/90-backup-uki`)
-   - Se ejecuta **antes** de crear el snapshot.
-   - Respalda los UKIs en `/etc/timeshift/uki-backup/` (dentro del snapshot).
-   - **Inteligente**: Solo copia si detecta cambios (vía SHA256).
+   - Se ejecuta **antes** de crear el snapshot
+   - Detecta dinámicamente la ESP con `findmnt` (soporta `/boot`, `/efi`, `/boot/efi`)
+   - Respalda UKIs en `/etc/timeshift/uki-backup/` (dentro del snapshot)
+   - **Selectivo**: solo copia UKIs que cambiaron (comparación SHA256 per-file)
+   - Limpia archivos `.sha256` huérfanos automáticamente
 
 2. **Restore Hook** (`/etc/timeshift/restore-hooks.d/90-restore-uki`)
-   - Se ejecuta **después** de restaurar.
-   - Devuelve los UKIs a la partición ESP.
-   - **Inteligente**: Salta archivos que ya son idénticos.
+   - Se ejecuta **después** de restaurar
+   - Detecta y monta la ESP dinámicamente (incluso en entornos chroot/Live USB)
+   - Verifica espacio disponible antes de copiar
+   - Devuelve los UKIs a la ESP con copia atómica (`mktemp + mv`)
+   - **Inteligente**: salta archivos que ya son idénticos
 
 ---
 
@@ -59,11 +64,30 @@ El instalador se encarga de:
 
 ---
 
+## ✨ Novedades en v2.4
+
+- **ESP dinámica**: Los hooks ya no dependen de rutas fijas. Detectan automáticamente
+  el punto de montaje de la partición EFI via `findmnt -t vfat`, soportando
+  cualquier configuración (`/boot`, `/efi`, `/boot/efi`, montajes custom).
+- **Soporte chroot/Live USB**: El restore hook detecta cuando se ejecuta dentro
+  de un entorno chroot (`systemd-detect-virt --chroot`) y monta la ESP
+  automáticamente si no lo está. Esto permite restauraciones desde Live USB.
+- **Verificación de espacio**: El restore hook comprueba que haya al menos 50MB
+  libres en la ESP antes de copiar, con advertencia si el espacio es crítico.
+- **Limpieza de huérfanos**: Ambos hooks limpian archivos `.sha256` que ya no
+  tienen su UKI correspondiente en el directorio de respaldo.
+- **Copia selectiva completa**: El backup hook itera todos los UKIs y solo
+  respalda los que realmente cambiaron (SHA256 per-file), sin el antiguo
+  comportamiento de "break al primer cambio".
+
 ## ✨ Novedades en v2.3
 
-- **Backup hook**: Eliminada rotación de backups (`.bak`) que acumulaba archivos sin límite en cada snapshot.
-- **Backup hook**: Eliminado bloque duplicado de verificación de directorio (código muerto).
-- **Install.sh**: Agregado `SCRIPT_DIR` para rutas absolutas, ahora funciona desde cualquier directorio.
+- **Backup hook**: Eliminada rotación de backups (`.bak`) que acumulaba archivos
+  sin límite en cada snapshot.
+- **Backup hook**: Eliminado bloque duplicado de verificación de directorio
+  (código muerto).
+- **Install.sh**: Agregado `SCRIPT_DIR` para rutas absolutas, ahora funciona
+  desde cualquier directorio.
 - **AUR**: Actualizado `.SRCINFO` y `PKGBUILD` a v2.3.
 
 ## ✨ Novedades en v2.2
