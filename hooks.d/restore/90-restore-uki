@@ -162,7 +162,7 @@ for uki_backup in "${backup_ukis[@]}"; do
     expected_sha=""
 
     if [ -f "$sha_file" ]; then
-        expected_sha=$(cat "$sha_file")
+        expected_sha=$(<"$sha_file")
         actual_sha=$(sha256sum "$uki_backup" | awk '{print $1}')
 
         if [ "$expected_sha" != "$actual_sha" ]; then
