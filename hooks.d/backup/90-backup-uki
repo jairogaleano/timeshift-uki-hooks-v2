@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Timeshift UKI Hooks - Backup Script (v2.6)
+# Timeshift UKI Hooks - Backup Script (v2.7)
 # Copyright (C) 2026 Jairo Galeano
 #
 # This program is free software: you can redistribute it and/or modify
@@ -36,6 +36,18 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [UKI Backup Hook] [$level] $message" >> "$LOG_FILE" 2>/dev/null || true
 }
 
+# Verificar si un punto de montaje corresponde a la particion EFI real (no USBs)
+is_esp_partition() {
+    local mount_point="$1"
+    local dev
+    dev=$(findmnt -no SOURCE "$mount_point" 2>/dev/null | head -1)
+    [ -z "$dev" ] && return 1
+
+    local parttype
+    parttype=$(lsblk -no PARTTYPE "$dev" 2>/dev/null | head -1)
+    [ "$parttype" = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" ]
+}
+
 detect_uki_dir() {
     local dirs=("/boot/EFI/Linux" "/efi/EFI/Linux" "/boot/efi/EFI/Linux")
     for d in "${dirs[@]}"; do
@@ -46,7 +58,10 @@ detect_uki_dir() {
     done
     local esp
     esp=$(findmnt -no TARGET -t vfat 2>/dev/null | while read -r mnt; do
-        if [ -d "$mnt/EFI/Linux" ]; then echo "$mnt"; break; fi
+        if [ -d "$mnt/EFI/Linux" ] && is_esp_partition "$mnt"; then
+            echo "$mnt"
+            break
+        fi
     done)
     if [ -n "$esp" ]; then
         echo "$esp/EFI/Linux"

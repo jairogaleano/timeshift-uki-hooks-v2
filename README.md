@@ -1,4 +1,4 @@
-# Timeshift UKI Hooks v2.6
+# Timeshift UKI Hooks v2.7
 
 Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Unified Kernel Images)** en sistemas con **Btrfs + Secure Boot**.
 
@@ -9,6 +9,7 @@ Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Uni
 - [Cómo funciona](#cómo-funciona)
 - [Requisitos](#requisitos)
 - [Instalación](#instalación)
+- [Novedades en v2.7](#novedades-en-v27)
 - [Novedades en v2.6](#novedades-en-v26)
 - [Novedades en v2.5](#novedades-en-v25)
 - [Novedades en v2.4](#novedades-en-v24)
@@ -65,6 +66,11 @@ El instalador se encarga de:
 4. Aplicar permisos de ejecución.
 
 ---
+
+## ✨ Novedades en v2.7
+
+- **Detección de ESP por PARTTYPE**: Los hooks ahora verifican el GUID de la partición (`c12a7328-f81f-11d2-ba4b-00a0c93ec93b`) antes de identificarla como ESP, evitando que se confunda con dispositivos USB externos con FAT32.
+- **Nueva función `is_esp_partition()`**: Función reutilizable que valida si un punto de montaje corresponde a la partición EFI real mediante `lsblk -no PARTTYPE`.
 
 ## ✨ Novedades en v2.6
 
