@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Timeshift UKI Hooks - Instalador v2.4
+# Timeshift UKI Hooks - Instalador v2.6
 #
 
 set -e
@@ -29,7 +29,7 @@ if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
 fi
 echo "Todas las dependencias encontradas."
 
-echo "Instalando Timeshift UKI Hooks v2.5..."
+echo "Instalando Timeshift UKI Hooks v2.6..."
 
 # Crear directorios si no existen
 mkdir -p /etc/timeshift/backup-hooks.d
@@ -50,5 +50,5 @@ echo "Aplicando permisos de ejecución..."
 chmod +x /etc/timeshift/backup-hooks.d/90-backup-uki
 chmod +x /etc/timeshift/restore-hooks.d/90-restore-uki
 
-echo "Instalacion/Actualizacion a v2.5 completada correctamente."
+echo "Instalacion/Actualizacion a v2.6 completada correctamente."
 echo "Los hooks han sido instalados con nombres estándar para compatibilidad con run-parts."
