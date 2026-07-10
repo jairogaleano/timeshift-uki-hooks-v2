@@ -152,6 +152,15 @@ for sha_file in "$BACKUP_DIR"/*.sha256; do
     fi
 done
 
+# Limpiar archivos .bak huerfanos en respaldo (rotaciones viejas)
+shopt -s nullglob
+for bak_file in "$BACKUP_DIR"/*.bak.*.efi "$BACKUP_DIR"/*.bak.efi "$BACKUP_DIR"/*.bak.*.efi.sha256 "$BACKUP_DIR"/*.bak.efi.sha256; do
+    [ -f "$bak_file" ] || continue
+    rm -f "$bak_file"
+    log "INFO" "Limpiado .bak huerfano en respaldo: ${bak_file##*/}"
+done
+shopt -u nullglob
+
 # 7. Restaurar UKIs con verificacion de integridad
 log "INFO" "Verificando integridad de UKIs respaldados..."
 
@@ -160,6 +169,12 @@ for uki_backup in "${backup_ukis[@]}"; do
     [ -f "$uki_backup" ] || continue
 
     basename="${uki_backup##*/}"
+
+    # Omitir archivos .bak (rotaciones viejas)
+    if [[ "$basename" == *".bak."* || "$basename" == *".bak.efi" ]]; then
+        continue
+    fi
+
     sha_file="${uki_backup%.efi}.sha256"
     expected_sha=""
 
