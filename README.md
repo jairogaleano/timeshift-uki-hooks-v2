@@ -1,4 +1,4 @@
-# Timeshift UKI Hooks v2.6
+# Timeshift UKI Hooks v2.5
 
 Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Unified Kernel Images)** en sistemas con **Btrfs + Secure Boot**.
 
@@ -64,7 +64,7 @@ El instalador se encarga de:
 
 ---
 
-## ✨ Novedades en v2.6
+## ✨ Novedades en v2.5
 
 - **Detección de ESP Robusta**: El restore hook ahora valida la existencia de `/EFI/Linux` antes de seleccionar la partición vfat, evitando errores con USBs externos (estandarizado con el backup hook).
 - **Optimización de Espacio**: Implementación de `df --output=avail` para una lectura de espacio más precisa y moderna.
