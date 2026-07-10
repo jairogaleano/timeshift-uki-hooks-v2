@@ -12,6 +12,23 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+echo "Verificando dependencias del sistema..."
+DEPENDENCIES=("findmnt" "mountpoint" "sha256sum" "df")
+MISSING_DEPS=()
+
+for dep in "${DEPENDENCIES[@]}"; do
+  if ! command -v "$dep" >/dev/null 2>&1; then
+    MISSING_DEPS+=("$dep")
+  fi
+done
+
+if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
+  echo "Error: Faltan las siguientes dependencias necesarias: ${MISSING_DEPS[*]}"
+  echo "Por favor, instálalas antes de continuar."
+  exit 1
+fi
+echo "Todas las dependencias encontradas."
+
 echo "Instalando Timeshift UKI Hooks v2.4..."
 
 # Crear directorios si no existen

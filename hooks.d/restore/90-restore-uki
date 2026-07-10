@@ -61,7 +61,9 @@ resolve_esp_mount() {
         fi
     done
     local esp
-    esp=$(findmnt -no TARGET -t vfat 2>/dev/null | head -1)
+    esp=$(findmnt -no TARGET -t vfat 2>/dev/null | while read -r mnt; do
+        if [ -d "$mnt/EFI/Linux" ]; then echo "$mnt"; break; fi
+    done)
     if [ -n "$esp" ] && [ -d "$esp" ]; then
         echo "$esp"
         return 0
@@ -131,7 +133,7 @@ if [ ${#backup_ukis[@]} -eq 0 ]; then
 fi
 
 # 5. Verificar espacio disponible en ESP
-esp_avail_kb=$(df -P "$TARGET_MNT" 2>/dev/null | awk 'NR==2 {print $4}')
+esp_avail_kb=$(df --output=avail "$TARGET_MNT" 2>/dev/null | tail -1)
 esp_avail_mb=$((esp_avail_kb / 1024)) 2>/dev/null || esp_avail_mb=0
 if [ "$esp_avail_mb" -lt "$MIN_ESP_SPACE_MB" ] && [ "$esp_avail_mb" -gt 0 ]; then
     log "WARN" "Poco espacio disponible en ESP: ${esp_avail_mb}MB (minimo recomendado: ${MIN_ESP_SPACE_MB}MB)"
