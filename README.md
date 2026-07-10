@@ -1,4 +1,4 @@
-# Timeshift UKI Hooks v2.5
+# Timeshift UKI Hooks v2.6
 
 Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Unified Kernel Images)** en sistemas con **Btrfs + Secure Boot**.
 
@@ -9,6 +9,8 @@ Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Uni
 - [Cómo funciona](#cómo-funciona)
 - [Requisitos](#requisitos)
 - [Instalación](#instalación)
+- [Novedades en v2.6](#novedades-en-v26)
+- [Novedades en v2.5](#novedades-en-v25)
 - [Novedades en v2.4](#novedades-en-v24)
 - [Novedades en v2.3](#novedades-en-v23)
 - [Seguridad](#seguridad)
@@ -63,6 +65,16 @@ El instalador se encarga de:
 4. Aplicar permisos de ejecución.
 
 ---
+
+## ✨ Novedades en v2.6
+
+- **Filtrado de archivos `.bak`**: Ambos hooks ahora ignoran archivos con `.bak` en el nombre
+  (rotaciones viejas del v2.1 que acumulaban entradas rotas en la ESP y en el directorio de respaldo).
+- **Auto-limpieza de `.bak`**: El backup hook elimina automáticamente archivos `.bak.*.efi` y `.bak.efi`
+  tanto de la ESP (`/boot/EFI/Linux/`) como del directorio de respaldo (`/etc/timeshift/uki-backup/`).
+  El restore hook hace lo mismo antes de restaurar.
+- **Causa raíz resuelta**: El glob `*.efi` capturaba archivos `.bak.*.efi` que terminaban
+  restaurándose en la ESP, generando entradas inválidas en el menú de systemd-boot.
 
 ## ✨ Novedades en v2.5
 
