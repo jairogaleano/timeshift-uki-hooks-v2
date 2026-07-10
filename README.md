@@ -1,14 +1,16 @@
-# Timeshift UKI Hooks v2.7
+# Timeshift UKI Hooks v3.0
 
-Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Unified Kernel Images)** en sistemas con **Btrfs + Secure Boot**.
+Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Unified Kernel Images)** en sistemas con **Btrfs + Secure Boot**. Compatible con múltiples distribuciones Linux.
 
 ## 📋 Tabla de Contenidos
 
 - [Concepto](#concepto)
 - [¿Por qué es necesario?](#por-qué-es-necesario)
 - [Cómo funciona](#cómo-funciona)
+- [Plataformas Soportadas](#plataformas-soportadas)
 - [Requisitos](#requisitos)
 - [Instalación](#instalación)
+- [Novedades en v3.0](#novedades-en-v30)
 - [Novedades en v2.7](#novedades-en-v27)
 - [Novedades en v2.6](#novedades-en-v26)
 - [Novedades en v2.5](#novedades-en-v25)
@@ -22,7 +24,7 @@ Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Uni
 
 ## 🔍 Concepto
 
-En sistemas Arch Linux con **systemd-boot** y **Secure Boot**, las imágenes UKI (ficheros `.efi`) residen en la partición **EFI System Partition (ESP)**.
+En sistemas Linux con **systemd-boot** (o GRUB) y **Secure Boot**, las imágenes UKI (ficheros `.efi`) residen en la partición **EFI System Partition (ESP)**.
 
 **El problema**: Timeshift protege la raíz (`/`), pero la partición ESP queda fuera. Si restauras un snapshot antiguo, el kernel en `/` (módulos) y el UKI en la ESP (kernel binario) no coincidirán, impidiendo el arranque o el funcionamiento de módulos.
 
@@ -48,6 +50,23 @@ Este proyecto sincroniza los UKIs con los snapshots de Btrfs mediante hooks:
 
 ---
 
+## 🖥️ Plataformas Soportadas
+
+| Distribución | Estado | Notas |
+|-------------|--------|-------|
+| Arch Linux / Manjaro / EndeavourOS | ✅ Completo | Soporte nativo con pacman |
+| Debian / Ubuntu / Linux Mint / Pop!_OS | ✅ Completo | Instalación vía apt |
+| Fedora | ✅ Completo | Instalación vía dnf |
+| openSUSE | ✅ Completo | Instalación vía zypper |
+| Void Linux | ✅ Completo | Instalación vía xbps |
+| Alpine Linux | ✅ Completo | Instalación vía apk |
+| Gentoo | ✅ Completo | Herramientas estándar GNU |
+| Otros (con systemd) | ✅ Compatible | Requiere util-linux y coreutils |
+
+**Init systems soportados:** systemd, OpenRC, runit, sysvinit
+
+---
+
 ## 📦 Instalación
 
 Hemos simplificado la instalación con un script dedicado:
@@ -60,12 +79,20 @@ sudo ./install.sh
 ```
 
 El instalador se encarga de:
-1. Crear los directorios de hooks.
-2. Limpiar versiones anteriores.
-3. Instalar los scripts con nombres canónicos para compatibilidad con `run-parts`.
-4. Aplicar permisos de ejecución.
+1. Detectar tu distribución y gestor de paquetes.
+2. Verificar e instalar dependencias faltantes automáticamente.
+3. Crear los directorios de hooks.
+4. Limpiar versiones anteriores.
+5. Instalar los scripts con nombres canónicos para compatibilidad con `run-parts`.
+6. Aplicar permisos de ejecución.
 
 ---
+
+## ✨ Novedades en v3.0
+
+- **Soporte multi-distribución**: `install.sh` ahora detecta automáticamente el gestor de paquetes (pacman, apt, dnf, zypper, xbps, apk) e instala las dependencias.
+- **Fallback para chroot**: El restore hook detecta entornos chroot sin depender de `systemd-detect-virt`, funcionando en systemd, OpenRC, runit y otros init systems.
+- **Detección robusta de contenedores**: Verifica namespaces de PID, `/.dockerenv` y `/proc/1/cgroup` para detectar chroot en Docker, LXC, Kubernetes, etc.
 
 ## ✨ Novedades en v2.7
 

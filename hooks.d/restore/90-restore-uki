@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Timeshift UKI Hooks - Restore Script (v2.7)
+# Timeshift UKI Hooks - Restore Script (v3.0)
 # Copyright (C) 2026 Jairo Galeano
 #
 # This program is free software: you can redistribute it and/or modify
@@ -57,7 +57,27 @@ WAS_RO=false
 TARGET_MNT=""
 IN_CHROOT=false
 
-if systemd-detect-virt --chroot >/dev/null 2>&1; then
+# Deteccion de chroot (compatible con systemd, OpenRC, runit, etc.)
+detect_chroot() {
+    # Metodo 1: systemd-detect-virt (si esta disponible)
+    if command -v systemd-detect-virt &>/dev/null; then
+        systemd-detect-virt --chroot >/dev/null 2>&1 && return 0
+    fi
+    # Metodo 2: Comparar namespace de PID
+    local my_ns init_ns
+    my_ns=$(readlink /proc/self/ns/pid 2>/dev/null || true)
+    init_ns=$(readlink /proc/1/ns/pid 2>/dev/null || true)
+    [ -n "$my_ns" ] && [ -n "$init_ns" ] && [ "$my_ns" != "$init_ns" ] && return 0
+    # Metodo 3: Verificar /.dockerenv
+    [ -f /.dockerenv ] && return 0
+    # Metodo 4: Verificar /proc/1/cgroup (contenedores)
+    if [ -f /proc/1/cgroup ]; then
+        grep -qE "docker|lxc|kubepods|containerd" /proc/1/cgroup 2>/dev/null && return 0
+    fi
+    return 1
+}
+
+if detect_chroot; then
     IN_CHROOT=true
     log "INFO" "Entorno chroot detectado. Ajustando rutas de montaje."
 fi
