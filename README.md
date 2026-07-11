@@ -69,8 +69,8 @@ Este proyecto sincroniza los UKIs con los snapshots de Btrfs mediante hooks:
 ### Instalación rápida
 
 ```bash
-git clone https://github.com/jairogaleano/timeshift-uki-hooks-v2.git
-cd timeshift-uki-hooks-v2
+git clone https://github.com/jairogaleano/timeshift-uki-hooks.git
+cd timeshift-uki-hooks
 sudo ./install.sh
 ```
 

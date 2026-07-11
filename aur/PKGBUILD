@@ -4,22 +4,22 @@ pkgver=v3.0
 pkgrel=1
 pkgdesc="Hooks inteligentes para Timeshift que sincronizan imágenes UKI (Unified Kernel Images) con snapshots Btrfs"
 arch=('any')
-url="https://github.com/jairogaleano/timeshift-uki-hooks-v2"
+url="https://github.com/jairogaleano/timeshift-uki-hooks"
 license=('GPL3')
 depends=('timeshift' 'bash' 'coreutils')
 makedepends=('git')
 provides=('timeshift-uki-hooks')
 conflicts=('timeshift-uki-hooks')
-source=("git+https://github.com/jairogaleano/timeshift-uki-hooks-v2.git")
+source=("git+https://github.com/jairogaleano/timeshift-uki-hooks.git")
 sha256sums=('SKIP')
 
 pkgver() {
-  cd "timeshift-uki-hooks-v2"
+  cd "timeshift-uki-hooks"
   git describe --long --always --tags | sed 's/\([^-]*-g\)/r\1/;s/-/./g' || printf "2.1.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 package() {
-  cd "timeshift-uki-hooks-v2"
+  cd "timeshift-uki-hooks"
   
   # Crear directorios en el sistema de destino
   install -d "${pkgdir}/etc/timeshift/backup-hooks.d"
