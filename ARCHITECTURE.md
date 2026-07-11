@@ -10,7 +10,7 @@ Son dos hooks que integran UKIs (Unified Kernel Images) con el sistema de snapsh
 
 Se ejecuta **antes** de cada snapshot. Su funcion es copiar los UKIs actuales desde la ESP a `/etc/timeshift/uki-backup/`. Como `/etc` esta dentro de la raiz Btrfs, los UKIs quedan **incluidos en el snapshot**.
 
-Selecciona archivos `.efi` del directorio `EFI/Linux` en la ESP. Para cada uno calcula SHA256: si ya existe un respaldo identico en `uki-backup/`, lo salta; si cambio, lo copia y escribe su `.sha256`. Antes de copiar, limpia archivos `.sha256` huerfanos (cuyo UKI ya no existe en la ESP).
+Selecciona archivos `.efi` del directorio `EFI/Linux` en la ESP. Para cada uno calcula SHA256: si ya existe un respaldo identico en `uki-backup/`, lo salta; si cambio, lo copia y escribe su `.sha256`. Antes de copiar, limpia archivos `.sha256` huerfanos (cuyo UKI ya no existe en la ESP). Verifica que la particion sea la ESP real mediante PARTTYPE GUID (`c12a7328-f81f-11d2-ba4b-00a0c93ec93b`) para evitar confusión con USBs.
 
 ### Cobertura de escenarios
 
@@ -35,7 +35,7 @@ Por cada UKI respaldado verifica su checksum SHA256 contra el `.sha256` acompana
 |---|---|
 | **Normal**: restauracion desde el sistema arrancado | ESP ya montada en `/boot` o `/efi`. Restaura solo UKIs distintos. |
 | **Falla tras actualizacion de kernel**: el usuario restaura un snapshot anterior para revertir | El hook coloca en la ESP los UKIs de la version anterior (los que estaban en el snapshot). Al reiniciar, kernel + modulos + UKI estan sincronizados. |
-| **Peor caso: sistema no arranca** (kernel corrupto, UKI danado, Secure Boot falla) | El usuario arranca desde un Live USB, monta su particion Btrfs, hace chroot, ejecuta Timeshift restore. El hook detecta el chroot con `systemd-detect-virt`, busca la particion EFI por PARTTYPE GUID (`c12a7328-f81f-11d2-ba4b-00a0c93ec93b`) via `lsblk`/`blkid`, la monta en `/tmp/esp-mount-XXXXXXXX`, restaura los UKIs y la desmonta al salir (trap). El usuario sale del chroot, reinicia y el sistema arranca con la version anterior. |
+| **Peor caso: sistema no arranca** (kernel corrupto, UKI danado, Secure Boot falla) | El usuario arranca desde un Live USB, monta su particion Btrfs, hace chroot, ejecuta Timeshift restore. El hook detecta el chroot con `detect_chroot()` (compatible con systemd, OpenRC, runit), busca la particion EFI por PARTTYPE GUID (`c12a7328-f81f-11d2-ba4b-00a0c93ec93b`) via `lsblk`, la monta en `/tmp/esp-mount-XXXXXXXX`, restaura los UKIs y la desmonta al salir (trap). El usuario sale del chroot, reinicia y el sistema arranca con la version anterior. |
 | **ESP montada RO** | Detecta `findmnt -O ro`, remonta RW, restaura, trap devuelve a RO. |
 | Multiples ESPs | Toma la primera particion con PARTTYPE EFI. |
 
@@ -47,10 +47,16 @@ Por cada UKI respaldado verifica su checksum SHA256 contra el `.sha256` acompana
 Restore Timeshift
        |
        v
+detect_chroot()  [v3.0: fallback sin systemd-detect-virt]
+  +- namespaces PID diferentes? -> IN_CHROOT=true
+  +- /.dockerenv existe?        -> IN_CHROOT=true
+  +- /proc/1/cgroup container?  -> IN_CHROOT=true
+       |
+       v
 resolve_esp_mount()
   +- ?/boot montado?   -> si -> TARGET_MNT=/boot
   +- ?/efi montado?    -> si -> TARGET_MNT=/efi
-  +- ?findmnt vfat?    -> si -> TARGET_MNT=resultado
+  +- ?findmnt vfat?    -> si -> is_esp_partition()? -> si -> TARGET_MNT=resultado
   +- NO -> intenta montar /boot /efi /boot/efi
              |
              v
