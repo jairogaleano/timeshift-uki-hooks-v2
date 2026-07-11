@@ -10,6 +10,7 @@ Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Uni
 - [Instalación](#instalación)
 - [Desinstalación](#desinstalación)
 - [Uso](#uso)
+- [Integración con pacman](#integración-con-pacman-timeshift-autosnap)
 - [Seguridad](#seguridad)
 - [Depuración e Integración de Logs](#depuración-e-integración-de-logs)
 - [Changelog](#changelog)
@@ -130,6 +131,37 @@ Una vez instalados, los hooks se ejecutan **automáticamente**:
    - Los UKIs se devuelven a la ESP
    - El sistema queda consistente y arrancable
 
+### Integración con pacman (`timeshift-autosnap`)
+
+En Arch Linux, el hook `00-timeshift-autosnap.hook` (incluido en el paquete `timeshift`) crea un snapshot automáticamente antes de cada actualización de paquetes. Nuestros hooks se ejecutan dentro de ese ciclo:
+
+```
+sudo pacman -Syu
+  └─ 00-timeshift-autosnap.hook (pre-transacción)
+       └─ timeshift-autosnap
+            └─ timeshift --create
+                 ├─ 90-backup-uki (antes del snapshot)
+                 │    └─ Copia UKIs de ESP → /etc/timeshift/uki-backup/
+                 └─ Snapshot creado (incluye los UKIs)
+```
+
+**Configuración** (`/etc/timeshift-autosnap.conf`):
+
+| Parámetro | Valor por defecto | Descripción |
+|-----------|-------------------|-------------|
+| `skipAutosnap` | `false` | Saltar la creación automática de snapshots |
+| `deleteSnapshots` | `true` | Eliminar snapshots antiguos automáticamente |
+| `maxSnapshots` | `3` | Cantidad máxima de snapshots a conservar |
+| `minHoursBetweenSnapshots` | `18` | Horas mínimas entre snapshots consecutivos |
+
+**Restaurar un snapshot** (el restore hook se ejecuta automáticamente):
+
+```bash
+sudo timeshift --restore
+```
+
+Los UKIs se devuelven a la ESP y el sistema queda consistente y arrancable.
+
 ### Comandos útiles
 
 ```bash
@@ -148,6 +180,24 @@ findmnt -t vfat
 ```
 
 ### Ejemplo de flujo completo
+
+**Flujo automático (con `timeshift-autosnap`):**
+
+```bash
+# pacman crea el snapshot automáticamente antes de actualizar
+sudo pacman -Syu
+# 1. timeshift-autosnap hook se ejecuta (pre-transacción)
+# 2. 90-backup-uki respalda los UKIs
+# 3. Se crea el snapshot con los UKIs incluidos
+# 4. Se instalan las actualizaciones
+
+# Si algo sale mal después de la actualización:
+sudo timeshift --restore
+# 5. 90-restore-uki devuelve los UKIs a la ESP
+# 6. Reiniciar
+```
+
+**Flujo manual:**
 
 ```bash
 # 1. Crear snapshot (el hook se ejecuta automáticamente)
