@@ -5,28 +5,25 @@ Sistema de hooks para **Timeshift** que respalda y restaura imágenes **UKI (Uni
 ## 📋 Tabla de Contenidos
 
 - [Concepto](#concepto)
-- [¿Por qué es necesario?](#por-qué-es-necesario)
-- [Cómo funciona](#cómo-funciona)
+- [Solución](#solución)
 - [Plataformas Soportadas](#plataformas-soportadas)
-- [Requisitos](#requisitos)
 - [Instalación](#instalación)
-- [Novedades en v3.0](#novedades-en-v30)
-- [Novedades en v2.7](#novedades-en-v27)
-- [Novedades en v2.6](#novedades-en-v26)
-- [Novedades en v2.5](#novedades-en-v25)
-- [Novedades en v2.4](#novedades-en-v24)
-- [Novedades en v2.3](#novedades-en-v23)
+- [Desinstalación](#desinstalación)
+- [Uso](#uso)
 - [Seguridad](#seguridad)
 - [Depuración e Integración de Logs](#depuración-e-integración-de-logs)
+- [Changelog](#changelog)
 - [Licencia](#licencia)
 
 ---
 
 ## 🔍 Concepto
 
-En sistemas Linux con **systemd-boot** (o GRUB) y **Secure Boot**, las imágenes UKI (ficheros `.efi`) residen en la partición **EFI System Partition (ESP)**.
+En sistemas Linux con **systemd-boot** y **Secure Boot**, las imágenes UKI (ficheros `.efi`) residen en la partición **EFI System Partition (ESP)**.
 
 **El problema**: Timeshift protege la raíz (`/`), pero la partición ESP queda fuera. Si restauras un snapshot antiguo, el kernel en `/` (módulos) y el UKI en la ESP (kernel binario) no coincidirán, impidiendo el arranque o el funcionamiento de módulos.
+
+> **Nota**: Este proyecto es específico para **systemd-boot**. Si usas GRUB, no necesitas estos hooks porque GRUB gestiona los kernels de forma diferente.
 
 ---
 
@@ -36,10 +33,10 @@ Este proyecto sincroniza los UKIs con los snapshots de Btrfs mediante hooks:
 
 1. **Backup Hook** (`/etc/timeshift/backup-hooks.d/90-backup-uki`)
    - Se ejecuta **antes** de crear el snapshot
-   - Detecta dinámicamente la ESP con `findmnt` (soporta `/boot`, `/efi`, `/boot/efi`)
+   - Detecta dinámicamente la ESP (verifica PARTTYPE para evitar USBs)
    - Respalda UKIs en `/etc/timeshift/uki-backup/` (dentro del snapshot)
    - **Selectivo**: solo copia UKIs que cambiaron (comparación SHA256 per-file)
-   - Limpia archivos `.sha256` huérfanos automáticamente
+   - Limpia archivos `.bak` y `.sha256` huérfanos automáticamente
 
 2. **Restore Hook** (`/etc/timeshift/restore-hooks.d/90-restore-uki`)
    - Se ejecuta **después** de restaurar
@@ -69,84 +66,102 @@ Este proyecto sincroniza los UKIs con los snapshots de Btrfs mediante hooks:
 
 ## 📦 Instalación
 
-Hemos simplificado la instalación con un script dedicado:
+### Instalación rápida
 
 ```bash
 git clone https://github.com/jairogaleano/timeshift-uki-hooks-v2.git
 cd timeshift-uki-hooks-v2
-sudo chmod +x install.sh
 sudo ./install.sh
 ```
 
-El instalador se encarga de:
-1. Detectar tu distribución y gestor de paquetes.
-2. Verificar e instalar dependencias faltantes automáticamente.
-3. Crear los directorios de hooks.
-4. Limpiar versiones anteriores.
-5. Instalar los scripts con nombres canónicos para compatibilidad con `run-parts`.
-6. Aplicar permisos de ejecución.
+### Qué hace el instalador
+
+1. Detecta tu distribución y gestor de paquetes.
+2. Verifica e instalar dependencias faltantes automáticamente (`util-linux`, `coreutils`).
+3. Crea los directorios de hooks en `/etc/timeshift/`.
+4. Limpia versiones anteriores.
+5. Instala los scripts con nombres canónicos para compatibilidad con `run-parts`.
+6. Aplica permisos de ejecución.
+
+### Requisitos previos
+
+- **Timeshift** instalado y configurado
+- **Btrfs** como sistema de archivos raíz
+- **systemd-boot** como gestor de arranque
+- **Secure Boot** habilitado (opcional pero recomendado)
 
 ---
 
-## ✨ Novedades en v3.0
+## 🗑️ Desinstalación
 
-- **Soporte multi-distribución**: `install.sh` ahora detecta automáticamente el gestor de paquetes (pacman, apt, dnf, zypper, xbps, apk) e instala las dependencias.
-- **Fallback para chroot**: El restore hook detecta entornos chroot sin depender de `systemd-detect-virt`, funcionando en systemd, OpenRC, runit y otros init systems.
-- **Detección robusta de contenedores**: Verifica namespaces de PID, `/.dockerenv` y `/proc/1/cgroup` para detectar chroot en Docker, LXC, Kubernetes, etc.
+### Opción automática (recomendado)
 
-## ✨ Novedades en v2.7
+```bash
+sudo rm -f /etc/timeshift/backup-hooks.d/90-backup-uki
+sudo rm -f /etc/timeshift/restore-hooks.d/90-restore-uki
+sudo rm -rf /etc/timeshift/uki-backup/
+```
 
-- **Detección de ESP por PARTTYPE**: Los hooks ahora verifican el GUID de la partición (`c12a7328-f81f-11d2-ba4b-00a0c93ec93b`) antes de identificarla como ESP, evitando que se confunda con dispositivos USB externos con FAT32.
-- **Nueva función `is_esp_partition()`**: Función reutilizable que valida si un punto de montaje corresponde a la partición EFI real mediante `lsblk -no PARTTYPE`.
+### Verificar desinstalación
 
-## ✨ Novedades en v2.6
+```bash
+ls /etc/timeshift/backup-hooks.d/
+ls /etc/timeshift/restore-hooks.d/
+# No deben mostrar archivos 90-backup-uki ni 90-restore-uki
+```
 
-- **Filtrado de archivos `.bak`**: Ambos hooks ahora ignoran archivos con `.bak` en el nombre
-  (rotaciones viejas del v2.1 que acumulaban entradas rotas en la ESP y en el directorio de respaldo).
-- **Auto-limpieza de `.bak`**: El backup hook elimina automáticamente archivos `.bak.*.efi` y `.bak.efi`
-  tanto de la ESP (`/boot/EFI/Linux/`) como del directorio de respaldo (`/etc/timeshift/uki-backup/`).
-  El restore hook hace lo mismo antes de restaurar.
-- **Causa raíz resuelta**: El glob `*.efi` capturaba archivos `.bak.*.efi` que terminaban
-  restaurándose en la ESP, generando entradas inválidas en el menú de systemd-boot.
+> **Nota**: Los directorios `/etc/timeshift/backup-hooks.d/` y `/etc/timeshift/restore-hooks.d/` pueden quedarse vacíos. Timeshift los ignora si están vacíos.
 
-## ✨ Novedades en v2.5
+---
 
-- **Detección de ESP Robusta**: El restore hook ahora valida la existencia de `/EFI/Linux` antes de seleccionar la partición vfat, evitando errores con USBs externos (estandarizado con el backup hook).
-- **Optimización de Espacio**: Implementación de `df --output=avail` para una lectura de espacio más precisa y moderna.
-- **Validación de Dependencias**: El instalador ahora verifica que todas las herramientas necesarias (`findmnt`, `mountpoint`, `sha256sum`, `df`) estén instaladas antes de proceder.
+## 🚀 Uso
 
-## ✨ Novedades en v2.4
+### Cómo funciona en la práctica
 
-- **ESP dinámica**: Los hooks ya no dependen de rutas fijas. Detectan automáticamente
-  el punto de montaje de la partición EFI via `findmnt -t vfat`, soportando
-  cualquier configuración (`/boot`, `/efi`, `/boot/efi`, montajes custom).
-- **Soporte chroot/Live USB**: El restore hook detecta cuando se ejecuta dentro
-  de un entorno chroot (`systemd-detect-virt --chroot`) y monta la ESP
-  automáticamente si no lo está. Esto permite restauraciones desde Live USB.
-- **Verificación de espacio**: El restore hook comprueba que haya al menos 50MB
-  libres en la ESP antes de copiar, con advertencia si el espacio es crítico.
-- **Limpieza de huérfanos**: Ambos hooks limpian archivos `.sha256` que ya no
-  tienen su UKI correspondiente en el directorio de respaldo.
-- **Copia selectiva completa**: El backup hook itera todos los UKIs y solo
-  respalda los que realmente cambiaron (SHA256 per-file), sin el antiguo
-  comportamiento de "break al primer cambio".
+Una vez instalados, los hooks se ejecutan **automáticamente**:
 
-## ✨ Novedades en v2.3
+1. **Al crear un snapshot** (manual o programado):
+   - Timeshift ejecuta `90-backup-uki` antes de crear el snapshot
+   - Los UKIs se respaldan en `/etc/timeshift/uki-backup/`
+   - El snapshot incluye los UKIs actualizados
 
-- **Backup hook**: Eliminada rotación de backups (`.bak`) que acumulaba archivos
-  sin límite en cada snapshot.
-- **Backup hook**: Eliminado bloque duplicado de verificación de directorio
-  (código muerto).
-- **Install.sh**: Agregado `SCRIPT_DIR` para rutas absolutas, ahora funciona
-  desde cualquier directorio.
-- **AUR**: Actualizado `.SRCINFO` y `PKGBUILD` a v2.3.
+2. **Al restaurar un snapshot**:
+   - Timeshift ejecuta `90-restore-uki` después de restaurar
+   - Los UKIs se devuelven a la ESP
+   - El sistema queda consistente y arrancable
 
-## ✨ Novedades en v2.2
+### Comandos útiles
 
-- **Fix crítico**: Variable `expected_sha` inicializada correctamente para evitar `unbound variable` en restore hook.
-- **Seguridad**: Uso de `mktemp` en vez de `$$` para archivos temporales en restore hook.
-- **Skip condicional**: La comparación de checksums en restore salta archivos solo cuando SHA256 está disponible.
-- **Limpieza**: Eliminada variable `skipped_count` sin uso y redirección redundante en restore hook.
+```bash
+# Ver logs en tiempo real
+tail -f /var/log/timeshift.log
+
+# Verificar que los hooks están instalados
+ls -la /etc/timeshift/backup-hooks.d/90-backup-uki
+ls -la /etc/timeshift/restore-hooks.d/90-restore-uki
+
+# Verificar respaldo actual
+ls -la /etc/timeshift/uki-backup/
+
+# Verificar ESP montada
+findmnt -t vfat
+```
+
+### Ejemplo de flujo completo
+
+```bash
+# 1. Crear snapshot (el hook se ejecuta automáticamente)
+sudo timeshift --create --comments "Antes de actualizar kernel"
+
+# 2. Actualizar sistema
+sudo pacman -Syu
+
+# 3. Si algo sale mal, restaurar
+sudo timeshift --restore
+
+# 4. El hook restaura los UKIs automáticamente
+# 5. Reiniciar y verificar que todo funciona
+```
 
 ---
 
@@ -155,6 +170,7 @@ El instalador se encarga de:
 - ✅ **Integridad**: Verificación SHA256 obligatoria antes de restaurar.
 - ✅ **Atomicidad**: Uso de copias temporales y `mv` para evitar archivos corruptos.
 - ✅ **Secure Boot**: No modifica firmas; solo preserva los binarios ya firmados.
+- ✅ **Detección de ESP**: Verifica PARTTYPE para no confundir con USBs.
 
 ---
 
@@ -164,12 +180,32 @@ Este proyecto se integra directamente con el sistema de registros de **Timeshift
 
 - **Logs Unificados**: Los mensajes de los hooks se inyectan en `/var/log/timeshift.log`. Esto permite ver en un solo lugar tanto las acciones de Timeshift como el estado de la sincronización de los UKIs.
 - **Rotación Automática**: Timeshift gestiona internamente la limpieza y rotación de estos logs (manteniendo las últimas sesiones). Al integrarse aquí, los registros de este proyecto se depuran automáticamente, evitando el crecimiento indefinido de archivos en `/var/log`.
-- **Enlace Simbólico**: El script escribe en `/var/log/timeshift.log`, que es el puntero estándar de Timeshift hacia el log de la ejecución actual.
 
-Ver logs en tiempo real:
-```bash
-tail -f /var/log/timeshift.log
-```
+### Solución de problemas
+
+| Síntoma | Causa probable | Solución |
+|---------|---------------|----------|
+| "No se pudo detectar la ESP" | USB conectado o ESP no montada | Desconectar USB o montar ESP manualmente |
+| "Checksum falló" | UKI corrupto en respaldo | Verificar integridad del SSD con SMART |
+| "Espacio insuficiente" | ESP casi llena | Limpiar kernels viejos de `/boot/EFI/Linux/` |
+| Hooks no se ejecutan | Permisos incorrectos | `chmod +x /etc/timeshift/*-hooks.d/90-*-uki` |
+
+---
+
+## 📄 Changelog
+
+Para el historial completo de cambios, ver [CHANGELOG.md](CHANGELOG.md).
+
+### v3.0 (Última versión)
+- **Soporte multi-distribución**: `install.sh` detecta automáticamente el gestor de paquetes (pacman, apt, dnf, zypper, xbps, apk).
+- **Fallback para chroot**: El restore hook detecta entornos chroot sin depender de `systemd-detect-virt`.
+- **Detección robusta de contenedores**: Namespaces PID, `/.dockerenv`, `/proc/1/cgroup`.
+
+### v2.7
+- **Detección de ESP por PARTTYPE**: Verifica GUID `c12a7328-f81f-11d2-ba4b-00a0c93ec93b` para evitar confusión con USBs.
+
+### v2.6
+- **Filtrado de archivos `.bak`**: Limpieza automática de rotaciones viejas.
 
 ---
 
